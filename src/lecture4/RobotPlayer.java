@@ -107,7 +107,7 @@ public strictfp class RobotPlayer {
                 if (rc.getRoundNum() - rc.readBroadcast(ENEMY_ARCHON_SPOTTED) < 10) {
                     goTowards(readLocation(ENEMY_ARCHON_CHANNEL));
                 }
-                if (rc.getRoundNum()  < 600) {
+                if (rc.getRoundNum() < 600) {
                     if (myDest == null){
                         MapLocation[] locs = rc.getInitialArchonLocations(rc.getTeam().opponent());
                         //look at the first archon spotted
@@ -283,28 +283,27 @@ public strictfp class RobotPlayer {
         float ycoord = map.y;
         int[] returnarray = new int[4];
         returnarray[0] = Math.round(xcoord - (xcoord % 1));
-        returnarray[1] = Math.toIntExact(Math.round((xcoord % 1) * Math.pow(10, 6)));
-        returnarray[2] = Math.round(xcoord - (ycoord % 1));
+        returnarray[1] = Math.toIntExact(Math.round((xcoord % 1)*Math.pow(10,6)));
+        returnarray[2] = Math.round(ycoord - (ycoord % 1));
         returnarray[3] = Math.toIntExact(Math.round((ycoord % 1)*Math.pow(10,6)));
         return(returnarray);
     }
 
     //What does readLocation do though?
-    static MapLocation readLocation(int firstChannel) throws GameActionException {
-        //this is going to read all the broadcast from all the broadcast
+    static MapLocation readLocation(int firstChannel) throws GameActionException{
         int[] array = new int[4];
         array[0] = rc.readBroadcast(firstChannel);
-        array[1] = rc.readBroadcast(firstChannel + 1);
-        array[2] = rc.readBroadcast(firstChannel + 2);
-        array[3] = rc.readBroadcast(firstChannel + 3);
+        array[1] = rc.readBroadcast(firstChannel+1);
+        array[2] = rc.readBroadcast(firstChannel+2);
+        array[3] = rc.readBroadcast(firstChannel+3);
         return convertLocationInts(array);
     }
 
     //convert the location integers into a MapLocation
     static MapLocation convertLocationInts(int[] arr) {
-        float xcoord = (float) (arr[0] + arr[1]/Math.pow(10,6));
-        float ycoord = (float) (arr[2] + arr[3]/Math.pow(10,6));
-        return (new MapLocation(xcoord, ycoord));
+        float xcoord = (float)(arr[0] + arr[1]/Math.pow(10,6));
+        float ycoord = (float)(arr[2] + arr[3]/Math.pow(10,6));
+        return(new MapLocation(xcoord,ycoord));
     }
 
 
@@ -317,7 +316,6 @@ public strictfp class RobotPlayer {
         rc.broadcast(firstChannel +1, arr[1]);
         rc.broadcast(firstChannel +2, arr[2]);
         rc.broadcast(firstChannel +3, arr[3]);
-
     }
 
 
