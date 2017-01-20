@@ -92,19 +92,83 @@ public strictfp class RobotPlayer {
         while(true) {
             try {
                 dodge();
+                //sensing nearby robots
                 RobotInfo[] bots = rc.senseNearbyRobots();
                 for (RobotInfo b: bots) {
                     if (b.getTeam() != rc.getTeam() && b.getType() == RobotType.ARCHON) {
+                        //If the Archon is not part of the team
+                        //Send a message describing the location of the Archon
                         writeLocation(b.getLocation(), ENEMY_ARCHON_CHANNEL);
                         rc.broadcast(ENEMY_ARCHON_SPOTTED, rc.getRoundNum());
                         break;
                     }
                 }
+                //if this shit happened less than 10 rounds ago go towards the Archon
                 if (rc.getRoundNum() - rc.readBroadcast(ENEMY_ARCHON_SPOTTED) < 10) {
                     goTowards(readLocation(ENEMY_ARCHON_CHANNEL));
                 }
+                if (rc.getRoundNum()  < 600) {
+                    if (myDest == null){
+                        MapLocation[] locs = rc.getInitialArchonLocations(rc.getTeam().opponent());
+                        //look at the first archon spotted
+                        myDest = locs[0];
+                    }
+                }
+                if (myDest != null) {
+                    goTowards(myDest);
+                }
+                wander();
+                Clock.yield();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
+    static void runLumberjack() throws GameActionException {
+        while (true) {
+            try {
+                dodge();
+                RobotInfo[] bots = rc.senseNearbyRobots();
+                for (RobotInfo b : bots) {
+                    if (b.getTeam() != rc.getTeam() && rc.canStrike()) {
+                        rc.strike();
+                        Direction chase = rc.getLocation().directionTo(b.getLocation());
+                        tryMove(chase);
+                        break;
+                    }
+                }
+                TreeInfo[] trees = rc.senseNearbyTrees();
+                for (TreeInfo t : trees) {
+                    if (rc.canChop(t.getLocation())) {
+                        rc.chop(t.getLocation());
+                        break;
+                    }
+                }
+                if (! rc.hasAttacked()) {
+                    wander();
+                }
+                Clock.yield();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
+    static void runSoldier() throws GameActionException {
+        while (true) {
+            try {
+                dodge();
+                RobotInfo[] bots = rc.senseNearbyRobots();
+                for (RobotInfo b : bots) {
+                    if (b.getTeam() != rc.getTeam()) {
+                        Direction towards = rc.getLocation().directionTo(b.getLocation());
+                        rc.fireSingleShot(towards);
+                        break;
+                    }
+                }
+                wander();
+                Clock.yield();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -220,7 +284,7 @@ public strictfp class RobotPlayer {
         int[] returnarray = new int[4];
         returnarray[0] = Math.round(xcoord - (xcoord % 1));
         returnarray[1] = Math.toIntExact(Math.round((xcoord % 1) * Math.pow(10, 6)));
-        returnarray[2] = Math.round(xcoord - (xcoord % 1));
+        returnarray[2] = Math.round(xcoord - (ycoord % 1));
         returnarray[3] = Math.toIntExact(Math.round((ycoord % 1)*Math.pow(10,6)));
         return(returnarray);
     }
@@ -236,20 +300,23 @@ public strictfp class RobotPlayer {
         return convertLocationInts(array);
     }
 
-    //converts location into int?
+    //convert the location integers into a MapLocation
     static MapLocation convertLocationInts(int[] arr) {
-        float xcoord = (float) (arr[0] + arr[1]
+        float xcoord = (float) (arr[0] + arr[1]/Math.pow(10,6));
+        float ycoord = (float) (arr[2] + arr[3]/Math.pow(10,6));
+        return (new MapLocation(xcoord, ycoord));
     }
 
 
     //what does writeLocation do though?
-    //it's broadcasting it to new channels so the scouts  can figure out where the archons are located
+    //it's broadcasting it to channels so the scouts  can figure out where the archons are located
     static void writeLocation(MapLocation map, int firstChannel) throws GameActionException {
+        //int array represents coordinate of maplocation with rounding/precision
         int[] arr = convertMapLocation(map);
         rc.broadcast(firstChannel, arr[0]);
-        rc.broadcast(firstChannel +1 , arr[1]);
-        rc.broadcast(firstChannel +2,  arr[2]);
-        rc.broadcast(firstChannel + 3, arr[3]);
+        rc.broadcast(firstChannel +1, arr[1]);
+        rc.broadcast(firstChannel +2, arr[2]);
+        rc.broadcast(firstChannel +3, arr[3]);
 
     }
 
