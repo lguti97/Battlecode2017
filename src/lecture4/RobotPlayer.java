@@ -100,6 +100,8 @@ public strictfp class RobotPlayer {
                         //Send a message describing the location of the Archon
                         writeLocation(b.getLocation(), ENEMY_ARCHON_CHANNEL);
                         rc.broadcast(ENEMY_ARCHON_SPOTTED, rc.getRoundNum());
+                        Direction towards = rc.getLocation().directionTo(b.getLocation());
+                        rc.fireSingleShot(towards);
                         break;
                     }
                 }
@@ -116,6 +118,7 @@ public strictfp class RobotPlayer {
                 }
                 if (myDest != null) {
                     goTowards(myDest);
+
                 }
                 wander();
                 Clock.yield();
