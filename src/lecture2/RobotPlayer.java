@@ -12,8 +12,9 @@ public strictfp class RobotPlayer {
     static int GARDNER_CHANNEL = 5;
     static int LUMBERJACK_CHANNEL = 6;
 
-    //Keep Important numbers here
+    //Keep max of spawn
     static int GARDNER_MAX = 4;
+    static int LUMBERJACK_MAX = 10;
 
     public static void run(RobotController rc) throws GameActionException {
         //RobotController object.
@@ -35,13 +36,12 @@ public strictfp class RobotPlayer {
         }
     }
 
-    //Provide code for Archon
     static void runArchon() throws GameActionException {
         while(true) {
             try {
                 //Choose random direction
                 Direction dir = randomDirection();
-                //Determine the previous number of gardners available
+                //Determine the previous number of gardners available. But what if nothing?
                 int prevNumGard = rc.readBroadcast(GARDNER_CHANNEL);
                 //broadcast's a 0 in the Gardner_Channel
                 rc.broadcast(GARDNER_CHANNEL, 0);
@@ -50,6 +50,7 @@ public strictfp class RobotPlayer {
                     rc.broadcast(GARDNER_CHANNEL, prevNumGard + 1);
                 }
                 //End the processing of the robot during the current round
+                System.out.println(prevNumGard);
                 Clock.yield();
             } catch (Exception e) {
                 //What happens when there is an exception
@@ -62,10 +63,85 @@ public strictfp class RobotPlayer {
         while (true) {
             try {
                 dodge();
+                //Tells you how many gardners are active.
+                int prev = rc.readBroadcast(GARDNER_CHANNEL);
+                rc.broadcast(GARDNER_CHANNEL, prev + 1);
+                System.out.println("TESTING :" + Integer.toString(prev));
+                //wander around?
+                wander();
+                Direction dir = randomDirection();
+                if (rc.getRoundNum() < 500) {
+                    int prevNumGard = rc.readBroadcast(LUMBERJACK_CHANNEL);
+                    if (prevNumGard <= LUMBERJACK_MAX && rc.canBuildRobot(RobotType.LUMBERJACK, dir)) {
+                        rc.buildRobot(RobotType.LUMBERJACK, dir);
+                        rc.broadcast(LUMBERJACK_CHANNEL, prevNumGard + 1);
+                    } else {
+                        if (rc.canBuildRobot(RobotType.SOLDIER, Direction.getEast())) {
+                            rc.buildRobot(RobotType.SOLDIER, Direction.getEast());
+                        }
+                    }
+                    Clock.yield();
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    static void runSoldier() throws GameActionException {
+        while (true) {
+            try{
+                dodge();
+                RobotInfo[] bots = rc.senseNearbyRobots();
+                for (RobotInfo b : bots) {
+                    if (b.getTeam() != rc.getTeam()) {
+                        //this is direction that points towards the enemy
+                        Direction towards = rc.getLocation().directionTo(b.getLocation());
+                        rc.fireSingleShot(towards);
+                        break;
+                    }
+                }
+                wander();
+                Clock.yield();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    static void runLumberjack() throws GameActionException {
+        while(true) {
+            try{
+                dodge();
+                RobotInfo[] bots = rc.senseNearbyRobots();
+                for (RobotInfo b: bots) {
+                    if (b.getTeam() != rc.getTeam() && rc.canStrike()){
+                        rc.strike();
+                        Direction chase = rc.getLocation().directionTo(b.getLocation());
+                        tryMove(chase);
+                        break;
+                    }
+                }
+                TreeInfo[] trees = rc.senseNearbyTrees();
+                for (TreeInfo t: trees){
+                    if (rc.canChop(t.getLocation())){
+                        rc.chop(t.getLocation());
+                        break;
+                    }
+                }
+                if (!rc.hasAttacked()){
+                    wander();
+                }
+                Clock.yield();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void wander() throws GameActionException {
+        Direction dir = randomDirection();
+        tryMove(dir);
     }
 
     //Make methods public
@@ -102,8 +178,13 @@ public strictfp class RobotPlayer {
         return (perpendicularDist <= rc.getType().bodyRadius);
     }
 
+    static boolean tryMove(Direction dir) throws GameActionException {
+        //give to other tryMove method
+        return tryMove(dir, 20, 3);
+    }
+
     /*
-    Attemps to move in a given direction, while avoiding small obstacles direction in the path
+    Attempts to move in a given direction, while avoiding small obstacles direction in the path
     @param dir the Intended direction of movement
     @param degreeOffset Spacing between checked direction (degrees)
     @param  checksPerSide Number of extra directions checked on each side, if intended direction was unavailable
@@ -120,18 +201,25 @@ public strictfp class RobotPlayer {
         int currentCheck = 1;
 
         while (currentCheck <= checksPerSide) {
+            // Try the offset on the leftside
             if (!rc.hasMoved() && rc.canMove(dir.rotateLeftDegrees(degreeOffset * currentCheck))) {
                 rc.move(dir.rotateLeftDegrees(degreeOffset * currentCheck));
-                return true; 
+                return true;
             }
+            // Try the offset on the rightside
+            if (!rc.hasMoved() && rc.canMove(dir.rotateRightDegrees(degreeOffset * currentCheck))) {
+                rc.move(dir.rotateRightDegrees(degreeOffset * currentCheck));
+                return true;
+            }
+            // No move performed, try slightly more
+            currentCheck++;
+
         }
-
-
-
-
+        // Move never happened so return false
+        return false;
     }
 
-
+    //What does trySidestep do?
     static boolean trySidestep(BulletInfo bullet) throws GameActionException {
         Direction towards = bullet.getDir();
         //returns a new MapLocation object representing a location dist unit away from this one in given dir.
@@ -146,6 +234,7 @@ public strictfp class RobotPlayer {
         BulletInfo[] bullets = rc.senseNearbyBullets();
         for (BulletInfo bi: bullets) {
             if (willCollideWithMe(bi)){
+                //this returns a boolean?
                 trySidestep(bi);
             }
         }

@@ -71,7 +71,6 @@ public strictfp class RobotPlayer {
                 //lastly build a soldier
                 trytoBuildSoldier(RobotType.SOLDIER, RobotType.SOLDIER.bulletCost);
 
-
                 //move around
                 if(rc.canMove(goingDir)){
                     rc.move(goingDir);
