@@ -101,7 +101,9 @@ public strictfp class RobotPlayer {
                         writeLocation(b.getLocation(), ENEMY_ARCHON_CHANNEL);
                         rc.broadcast(ENEMY_ARCHON_SPOTTED, rc.getRoundNum());
                         Direction towards = rc.getLocation().directionTo(b.getLocation());
-                        rc.fireSingleShot(towards);
+                        if (rc.canFireTriadShot()) {
+                            rc.fireSingleShot(towards);
+                        }
                         break;
                     }
                 }
