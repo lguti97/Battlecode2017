@@ -89,7 +89,7 @@ public class RobotPlayer {
     static void runGardener() throws GameActionException {
         while (true) {
             try {
-               Direction initial = Direction.EAST;
+               Direction initial = Direction.getEast();
                int treeCount = 0;
                for (int i = 0; i < 5; i++) {
                    if (rc.canPlantTree(initial.rotateLeftDegrees(i * 60))) {
