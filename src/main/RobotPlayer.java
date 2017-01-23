@@ -64,6 +64,7 @@ public class RobotPlayer {
                 if (rc.getID() == LEAD_ARCHON) {
                     int prevNumGard = rc.readBroadcast(GARDENER_CHANNEL);
                     rc.broadcast(GARDENER_CHANNEL, 0);
+                    System.out.println(prevNumGard);
                     if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
                         rc.hireGardener(dir);
                         rc.broadcast(GARDENER_CHANNEL, prevNumGard + 1);
