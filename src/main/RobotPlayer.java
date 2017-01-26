@@ -229,8 +229,8 @@ public class RobotPlayer {
                         writeLocation(b.getLocation(), ENEMY_ARCHON_CHANNEL);
                         rc.broadcast(ENEMY_ARCHON_SPOTTED, rc.getRoundNum());
                         Direction towards = rc.getLocation().directionTo(b.getLocation());
-                        if (rc.canFireTriadShot()) {
-                            rc.fireTriadShot(towards);
+                        if (rc.canFireSingleShot()){
+                            rc.fireSingleShot(towards);
                         }
                         break;
                     }
