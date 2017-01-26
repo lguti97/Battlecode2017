@@ -29,9 +29,13 @@ public class RobotPlayer {
     static int SCOUT_MAX = 3;
     static int LUMBERJACK_MAX = 10;
 
+    //other important stuff
+    static Direction[] dirList = new Direction[4];
+
     public static void run(RobotController rc) throws GameActionException {
         RobotPlayer.rc = rc;
         myRand = new Random(rc.getID());
+        initDirList();
         switch (rc.getType()) {
             case ARCHON:
                 runArchon();
@@ -102,27 +106,32 @@ public class RobotPlayer {
             try {
                Direction initial = Direction.getEast();
                Direction dir = randomDirection();
-               int treeCount = 0;
                int prev = rc.readBroadcast(GARDENER_CHANNEL);
+
+               //update broadcast saying gardener is alive
                rc.broadcast(GARDENER_CHANNEL, prev + 1);
 
-               if (rc.getRoundNum() < 300) {
+               //FOR THE FIRST 100 ROUNDS
+               if (rc.getRoundNum() < 100) {
                    int prevNumScout = rc.readBroadcast(SCOUT_CHANNEL);
                    if (prevNumScout < SCOUT_MAX && rc.canBuildRobot(RobotType.SCOUT, dir)) {
                        rc.buildRobot(RobotType.SCOUT, dir);
                        rc.broadcast(SCOUT_CHANNEL, prevNumScout + 1);
                    }
                }
-
-               for (int i = 0; i < 5; i++) {
-                   if (rc.canPlantTree(initial.rotateLeftDegrees(i * 60))) {
-                       rc.plantTree(initial.rotateLeftDegrees(i * 60));
+               //FOR THE NEXT ROUNDS
+               else {
+                   //keep track of the amount of trees ma
+                   if (rc.senseNearbyTrees().length < 2) {
+                       //place code for planting trees
+                       for (int i = 0; i <= 4; i++) {
+                           if (rc.canPlantTree(initial.rotateRightDegrees(i * 60))) {
+                               rc.plantTree(initial.rotateRightDegrees(i * 60));
+                               break;
+                           }
+                       }
                    }
-                   else {
-                       treeCount++;
-                   }
-
-                   //Water trees if low health
+                   //WATER THE TREE
                    TreeInfo[] trees = rc.senseNearbyTrees();
                    for (int j = 0; j < trees.length; j++) {
                        if (trees[j].getHealth() <  BULLET_TREE_MAX_HEALTH - 10) {
@@ -132,13 +141,14 @@ public class RobotPlayer {
                            }
                        }
                    }
-                   //construct lumberjacks when there are 4 trees for protection
-                   if (treeCount == 4) {
-                       if (rc.canBuildRobot(RobotType.LUMBERJACK, initial.rotateLeftDegrees(5 * 60))) {
-                           rc.buildRobot(RobotType.LUMBERJACK, initial.rotateLeftDegrees(5 * 60));
-                       }
+
+                   //Construct lumberjacks anywhere it can lol
+                   if (rc.senseNearbyTrees().length == 2) {
+                       tryBuild(RobotType.LUMBERJACK);
                    }
+
                }
+
                Clock.yield();
 
             } catch (Exception e) {
@@ -231,6 +241,8 @@ public class RobotPlayer {
                         Direction towards = rc.getLocation().directionTo(b.getLocation());
                         if (rc.canFireSingleShot()){
                             rc.fireSingleShot(towards);
+                            //if fire is shot then don't move
+                            Clock.yield();
                         }
                         break;
                     }
@@ -247,7 +259,6 @@ public class RobotPlayer {
                 }
                 if (myDest != null) {
                     goTowards(myDest);
-
                 }
                 wander();
                 Clock.yield();
@@ -396,6 +407,23 @@ public class RobotPlayer {
         rc.broadcast(firstChannel +1, arr[1]);
         rc.broadcast(firstChannel +2, arr[2]);
         rc.broadcast(firstChannel +3, arr[3]);
+    }
+
+    public static void initDirList(){
+        for(int i=0;i<4;i++){
+            float radians = (float)(-Math.PI + 2*Math.PI*((float)i)/4);
+            dirList[i]=new Direction(radians);
+            System.out.println("made new direction "+dirList[i]);
+        }
+    }
+
+    public static void tryBuild(RobotType type) throws GameActionException {
+        for (int i = 0; i < 4; i++) {
+            if(rc.canBuildRobot(type,dirList[i])){
+                rc.buildRobot(type,dirList[i]);
+                break;
+            }
+        }
     }
 
 
