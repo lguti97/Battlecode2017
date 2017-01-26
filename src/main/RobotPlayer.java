@@ -142,7 +142,7 @@ public class RobotPlayer {
                        }
                    }
 
-                   //Construct lumberjacks anywhere it can lol
+                   //Not exactly the best method
                    if (rc.senseNearbyTrees().length == 2) {
                        tryBuild(RobotType.LUMBERJACK);
                    }
