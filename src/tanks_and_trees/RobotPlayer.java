@@ -89,40 +89,7 @@ public strictfp class RobotPlayer {
 	}
 
 	static void runGardener() throws GameActionException {
-	/*	System.out.println("I'm a gardener!");
-
-		// The code you want your robot to perform every round should be in this loop
-		while (true) {
-
-			// Try/catch blocks stop unhandled exceptions, which cause your robot to explode
-			try {
-				
-				// Listen for home archon's location
-				int xPos = rc.readBroadcast(0);
-				int yPos = rc.readBroadcast(1);
-				MapLocation archonLoc = new MapLocation(xPos,yPos);
-
-				// Generate a random direction
-				Direction dir = randomDirection();
-
-				// Randomly attempt to build a soldier or lumberjack in this direction
-
-
-				if (rc.canBuildRobot(RobotType.TANK, dir) && Math.random()<.6 && rc.getRoundNum() > 2000) {
-					rc.buildRobot(RobotType.TANK, dir);
-					System.out.println("PLANTING THAT TANK NIGGA");
-				}
-
-				else if(rc.canBuildRobot(RobotType.SCOUT, dir) && rc.getRoundNum() < 150) {
-
-					rc.buildRobot(RobotType.SCOUT, dir);
-					System.out.println("PLANTING THAT SCOUT NIGGA");
-				}
-
-
-
-
-			*/
+	
 		
 	        System.out.println("I'm a gardener!");
 
@@ -146,15 +113,7 @@ public strictfp class RobotPlayer {
 	            	
 	            if(rc.getRoundNum() >50){	
 	            	
-	            	for (int k = 0; k < robot.length; k++ ){
-	            		System.out.println(robot[k].getType());
-	            		//if (robot[k].getType() == Gardener){
-	            			
-	            		//	tryMove(randomDirection());
-	            		//}
-	            	}	
-	            	
-	            	
+	            		
 	            	
 	            		Direction direction_start = Direction.getEast();
 	            		for (int i = 0; i < 5 ; i++){
@@ -168,7 +127,7 @@ public strictfp class RobotPlayer {
 	            			if (treecount == 5) {
 	            				TreeInfo[] tree_list = rc.senseNearbyTrees();
 	            				for (int j = 0; j < tree_list.length ; j++) {
-	            					if(tree_list[j].getHealth() < (GameConstants.BULLET_TREE_MAX_HEALTH - 10)){
+	            					if(tree_list[j].getHealth() < (GameConstants.BULLET_TREE_MAX_HEALTH - 10) && rc.canWater(tree_list[j].getID())){
 
 	            						rc.water(tree_list[j].getID());
 	            						break;
@@ -188,6 +147,8 @@ public strictfp class RobotPlayer {
 	            		}
 	            	}
 	            	
+	            		Broadcast_soldier_num();
+	            		
 	            }	
 	            	
 	            	
@@ -233,8 +194,9 @@ public strictfp class RobotPlayer {
 			// Try/catch blocks stop unhandled exceptions, which cause your robot to explode
 			try {
 				dodge();
-				MapLocation myLocation = rc.getLocation();
-			    SeekandDestroy(15);
+				
+			    SeekandDestroy(20);
+			    DefendGardeners(2);
 				
 				
 				// See if there are any nearby enemy robots
@@ -295,7 +257,8 @@ public strictfp class RobotPlayer {
 							if(rc.canMove(tree_list[i].getLocation())){
 
 								rc.move(tree_list[i].getLocation());
-								rc.shake(tree_list[i].getID());
+								if(rc.canShake(tree_list[i].getLocation())){
+								rc.shake(tree_list[i].getID());}
 								if(!rc.canShake()){
 									System.out.println("I shook it");
 									break;
@@ -320,7 +283,8 @@ public strictfp class RobotPlayer {
 				if(rc.getRoundNum() < 70){
 					MapLocation archonLoc = rc.getInitialArchonLocations(enemy)[0];
 					Direction enemydirection = new Direction(rc.getLocation(), archonLoc);
-					tryMove(enemydirection);
+					if(!rc.hasMoved()){
+					tryMove(enemydirection);}
 					if(rc.hasMoved()){
 						System.out.println("scouting enemy archon");}
 				}
@@ -587,6 +551,28 @@ public strictfp class RobotPlayer {
 		rc.broadcast(3,(int)robots[0].getLocation().y);
 
 	}
+	
+	
+	static void Broadcast_soldier_num() throws GameActionException {
+		System.out.println("Broadcasting my location: ");
+		Team friendly = rc.getTeam();
+		RobotInfo[] robots = rc.senseNearbyRobots(-1, friendly);
+		int soldier_count = 0;
+		for(int i = 0; i<robots.length; i++){
+			if(robots[i].getType() == RobotType.SOLDIER){
+				soldier_count++;
+			}
+			
+		}
+		if(soldier_count < 2){
+		
+		MapLocation myLocation = rc.getLocation();
+		rc.broadcast(3,(int)myLocation.x);
+		rc.broadcast(4,(int)myLocation.y);
+		rc.broadcast(5,soldier_count);}
+
+	}
+
 
 	static void Donate() throws GameActionException {
 		if(rc.getRobotCount() > 75 && rc.getRoundNum() > 1200)
@@ -603,7 +589,7 @@ public strictfp class RobotPlayer {
 	}
 	
 	
-	
+
 	static void SeekandDestroy(int reinforcements)  throws GameActionException {
 
 		int enemyxPos = 0;
@@ -631,8 +617,50 @@ public strictfp class RobotPlayer {
 				tryMove(randomDirection());}
 
 		}
-	
+
 	}
+
+
+	static void DefendGardeners(int reinforcements)  throws GameActionException {
+
+		
+		if(rc.readBroadcast(5) < reinforcements){
+			int gardenerxPos = 0;
+			int gardeneryPos = 0;
+
+
+			gardenerxPos = rc.readBroadcast(4);
+			gardeneryPos = rc.readBroadcast(5);
+			MapLocation gardenerLoc = new MapLocation(gardenerxPos,gardeneryPos);
+		
+			Direction gardenerDirection = new Direction(rc.getLocation(), gardenerLoc);
+			if(!rc.hasMoved()){
+				tryMove(gardenerDirection);
+				System.out.println("Moving to protect gardeners");
+				
+			}
+		
+		}
+		
+		
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
 
