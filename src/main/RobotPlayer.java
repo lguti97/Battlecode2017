@@ -25,6 +25,9 @@ public class RobotPlayer {
     static int ENEMY_ARCHON_SPOTTED = 54;
     static int OUR_ARCHON_CHANNEL = 55;
     static int LEAD_ARCHON_CHANNEL = 97;
+    static int TREES_CHANNEL = 69;
+    static int FIRST_ARCHON = 0;
+
 
     //max respawn numbers
     static int GARDENER_MAX = 2;
@@ -63,12 +66,10 @@ public class RobotPlayer {
             try {
                 dodge();
                 Direction dir = randomDirection();
-                //MAKE LEADER ARCHON
-                if (rc.getRoundNum() == 1 && rc.readBroadcast(LEAD_ARCHON_CHANNEL) == 0) {
-                    makeLeader(rc);
-                }
-                //if more than one archon is there build a gardener for each and try not
-                //cap it to 1 gardener for each archon and then build gardeners for each one.
+                //set a leader archon
+
+                makeLeader(rc);
+
                 //Do LEADER_ARCHON ACTIONS
                 if (rc.getID() == rc.readBroadcast(LEAD_ARCHON_CHANNEL)) {
                     int prevNumGard = rc.readBroadcast(GARDENER_CHANNEL);
@@ -79,7 +80,6 @@ public class RobotPlayer {
                         //one gardener already built so build one scout
                         tryBuild(RobotType.SCOUT);
                     }
-
                     else if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
                         rc.hireGardener(dir);
                         rc.broadcast(GARDENER_CHANNEL, prevNumGard + 1);
@@ -286,7 +286,22 @@ public class RobotPlayer {
     }
 
     static void makeLeader(RobotController rc) throws GameActionException {
-        rc.broadcast(LEAD_ARCHON_CHANNEL, rc.getID());
+        //make the initial broadcast a number that's very high
+        if (rc.readBroadcast(TREES_CHANNEL) == 0 && rc.readBroadcast(FIRST_ARCHON ) == 0) {
+            rc.broadcast(TREES_CHANNEL, 10000);
+            rc.broadcast(FIRST_ARCHON, rc.readBroadcast(FIRST_ARCHON) + 1);
+        }
+
+        if (rc.getRoundNum() == 1) {
+            if (rc.senseNearbyTrees().length < rc.readBroadcast(TREES_CHANNEL)) {
+                rc.broadcast(TREES_CHANNEL, rc.senseNearbyTrees().length);
+            }
+        }
+        else if (rc.getRoundNum() == 2 && rc.readBroadcast(LEAD_ARCHON_CHANNEL) == 0
+                && rc.readBroadcast(TREES_CHANNEL) == rc.senseNearbyTrees().length) {
+            rc.broadcast(LEAD_ARCHON_CHANNEL, rc.getID());
+        }
+
     }
 
     static boolean tryMove(Direction dir) throws GameActionException {
