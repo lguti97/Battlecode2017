@@ -1,5 +1,7 @@
 package main;
 import battlecode.common.*;
+
+import java.awt.*;
 import java.util.Random;
 
 import static battlecode.common.GameConstants.*;
@@ -25,8 +27,8 @@ public class RobotPlayer {
     static int LEAD_ARCHON_CHANNEL = 97;
 
     //max respawn numbers
-    static int GARDENER_MAX = 3;
-    static int SCOUT_MAX = 3;
+    static int GARDENER_MAX = 2;
+    static int SCOUT_MAX = 2;
     static int LUMBERJACK_MAX = 10;
 
     //other important stuff
@@ -61,25 +63,31 @@ public class RobotPlayer {
             try {
                 dodge();
                 Direction dir = randomDirection();
-
                 //MAKE LEADER ARCHON
                 if (rc.getRoundNum() == 1 && rc.readBroadcast(LEAD_ARCHON_CHANNEL) == 0) {
-                    System.out.print("lol");
                     makeLeader(rc);
                 }
-
+                //if more than one archon is there build a gardener for each and try not
+                //cap it to 1 gardener for each archon and then build gardeners for each one.
                 //Do LEADER_ARCHON ACTIONS
                 if (rc.getID() == rc.readBroadcast(LEAD_ARCHON_CHANNEL)) {
                     int prevNumGard = rc.readBroadcast(GARDENER_CHANNEL);
                     rc.broadcast(GARDENER_CHANNEL, 0);
-                    if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
+
+                    //if there are less than 2 scouts keep building scouts for now
+                    if (prevNumGard == 1 && rc.readBroadcast(SCOUT_CHANNEL) < 2) {
+                        //one gardener already built so build one scout
+                        tryBuild(RobotType.SCOUT);
+                    }
+
+                    else if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
                         rc.hireGardener(dir);
                         rc.broadcast(GARDENER_CHANNEL, prevNumGard + 1);
-                        System.out.println(prevNumGard);
                     }
-                    System.out.println(prevNumGard);
+
                 }
                 //DO NON LEADER ACTIONS
+                //Skip this component now and focus on just one archon
                 else {
                     if (rc.canHireGardener(dir)) {
                         rc.hireGardener(dir);
@@ -119,7 +127,7 @@ public class RobotPlayer {
                        rc.broadcast(SCOUT_CHANNEL, prevNumScout + 1);
                    }
                }
-               //FOR THE NEXT ROUNDS
+               //After the gardener has built two scouts
                else {
                    //keep track of the amount of trees ma
                    if (rc.senseNearbyTrees().length < 2) {
@@ -425,6 +433,7 @@ public class RobotPlayer {
             }
         }
     }
+
 
 
 }
