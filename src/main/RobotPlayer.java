@@ -67,7 +67,6 @@ public class RobotPlayer {
                 dodge();
                 Direction dir = randomDirection();
                 //set a leader archon
-
                 makeLeader(rc);
 
                 //Do LEADER_ARCHON ACTIONS
@@ -81,6 +80,7 @@ public class RobotPlayer {
                         tryBuild(RobotType.SCOUT);
                     }
                     else if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
+                        //find a strategy way place gardener.
                         rc.hireGardener(dir);
                         rc.broadcast(GARDENER_CHANNEL, prevNumGard + 1);
                     }
