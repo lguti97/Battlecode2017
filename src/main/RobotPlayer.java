@@ -2,6 +2,7 @@ package main;
 import battlecode.common.*;
 
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.Random;
 
 import static battlecode.common.GameConstants.*;
@@ -16,6 +17,7 @@ public class RobotPlayer {
     static MapLocation myDest = null;
     static Direction myDir = null;
     static boolean stuck = false;
+    static boolean swarm = false;
 
     //broadcast channels
     static int GARDENER_CHANNEL = 5;
@@ -23,10 +25,10 @@ public class RobotPlayer {
     static int LUMBERJACK_CHANNEL = 6;
     static int ENEMY_ARCHON_CHANNEL = 50;
     static int ENEMY_ARCHON_SPOTTED = 54;
-    static int OUR_ARCHON_CHANNEL = 55;
     static int LEAD_ARCHON_CHANNEL = 97;
     static int TREES_CHANNEL = 69;
     static int FIRST_ARCHON = 0;
+    static int SWARM_CHANNEL = 100;
 
 
     //max respawn numbers
@@ -65,8 +67,12 @@ public class RobotPlayer {
         while (true) {
             try {
                 dodge();
+
+                //tells soldiers where the Archon is
+                Direction toEnemy = rc.getLocation().directionTo(rc.getInitialArchonLocations(rc.getTeam().opponent())[0]);
+                writeLocation(rc.getLocation().add(toEnemy, rc.getType().bodyRadius), SWARM_CHANNEL);
+
                 Direction dir = randomDirection();
-                //set a leader archon
                 makeLeader(rc);
 
                 //Do LEADER_ARCHON ACTIONS
@@ -150,7 +156,7 @@ public class RobotPlayer {
                        }
                    }
 
-                   tryBuild(RobotType.LUMBERJACK);
+                   tryBuild(RobotType.SOLDIER);
 
                }
 
@@ -165,7 +171,26 @@ public class RobotPlayer {
     static void runSoldier () throws GameActionException {
         while(true) {
             try {
-                //perhaps I should run the soldier?
+                dodge();
+
+                if (!rc.hasMoved()) {
+                    MapLocation loc = readLocation(SWARM_CHANNEL);
+                    swarm(loc, 5);
+                }
+
+                RobotInfo[] bots = rc.senseNearbyRobots();
+                for (RobotInfo bot: bots) {
+                    if (bot.getTeam() != rc.getTeam() && rc.canFireTriadShot()) {
+                        fixLocation(rc, bot);
+                        rc.fireTriadShot(rc.getLocation().directionTo(bot.getLocation()));
+                    }
+                }
+
+                if (!rc.hasAttacked()) {
+                    moveToTarget(rc.getInitialArchonLocations(rc.getTeam().opponent())[0]);
+                }
+                Clock.yield();
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -238,17 +263,12 @@ public class RobotPlayer {
                 //sensing nearby robots
                 RobotInfo[] bots = rc.senseNearbyRobots();
                 for (RobotInfo b: bots) {
-                    if (b.getTeam() != rc.getTeam() && b.getType() == RobotType.GARDENER) {
+                    if (b.getTeam() != rc.getTeam() && b.getType() == RobotType.ARCHON) {
                         //If the Archon is not part of the team
                         //Send a message describing the location of the Archon
                         writeLocation(b.getLocation(), ENEMY_ARCHON_CHANNEL);
                         rc.broadcast(ENEMY_ARCHON_SPOTTED, rc.getRoundNum());
                         Direction towards = rc.getLocation().directionTo(b.getLocation());
-                        if (rc.canFireSingleShot()){
-                            rc.fireSingleShot(towards);
-                            //if fire is shot then don't move
-                            Clock.yield();
-                        }
                         break;
                     }
                 }
@@ -456,6 +476,98 @@ public class RobotPlayer {
         }
     }
 
+    public static void fixLocation(RobotController rc, RobotInfo bot) throws GameActionException {
+        MapLocation enemyLocation = bot.getLocation();
+        MapLocation friendlyLocation = rc.getLocation();
+        //provide how many steps to move in direction of enemy robot
+        float distanceAway = friendlyLocation.distanceTo(enemyLocation);
+        float distanceToMove = Math.abs(4.00f - distanceAway);
+        Direction toward = friendlyLocation.directionTo(enemyLocation);
+        moveToTarget(friendlyLocation.add(toward, distanceToMove));
+    }
+
+    private static boolean moveToTarget(MapLocation location) throws GameActionException{
+        // try to take a big step
+        if (slugMoveToTarget(location, rc.getType().strideRadius)) {
+            return(true);
+        }
+        // try to take a smaller step
+        if (slugMoveToTarget(location, rc.getType().strideRadius/2)) {
+            return(true);
+        }
+        // try to take a baby step
+        if (slugMoveToTarget(location, rc.getType().strideRadius/4)) {
+            return(true);
+        }
+        else {
+            wander();
+            return(false);
+        }
+        // insert move randomly code here
+
+    }
+
+    static ArrayList<MapLocation> oldLocations = new ArrayList<MapLocation>();
+
+    private static boolean slugMoveToTarget(MapLocation target, float strideRadius) throws GameActionException{
+
+        // when trying to move, let's look forward, then incrementing left and right.
+        float[] toTry = {0, (float)Math.PI/4, (float)-Math.PI/4, (float)Math.PI/2, (float)-Math.PI/2, 3*(float)Math.PI/4, -3*(float)Math.PI/4, -(float)Math.PI};
+
+        MapLocation ourLoc = rc.getLocation();
+        Direction toMove = ourLoc.directionTo(target);
+
+        // let's try to find a place to move!
+        for (int i = 0; i < toTry.length; i++) {
+            Direction dirToTry = toMove.rotateRightDegrees(toTry[i]);
+            if (rc.canMove(dirToTry, strideRadius)) {
+                // if that location is free, let's see if we've already moved there before (aka, it's in our tail)
+                MapLocation newLocation = ourLoc.add(dirToTry, strideRadius);
+                boolean haveWeMovedThereBefore = false;
+                for (int j = 0; j < oldLocations.size(); j++) {
+                    if (newLocation.distanceTo(oldLocations.get(j)) < strideRadius * strideRadius) {
+                        haveWeMovedThereBefore = true;
+                        break;
+                    }
+                }
+                if (!haveWeMovedThereBefore) {
+                    oldLocations.add(newLocation);
+                    if (oldLocations.size() > 10) {
+                        // remove the head and chop the list down to size 10 (or whatever you want to use)
+                    }
+                    if (! rc.hasMoved() && rc.canMove(dirToTry, strideRadius)) {
+                        rc.move(dirToTry, strideRadius);
+                    }
+                    return(true);
+                }
+
+            }
+        }
+        //looks like we can't move anywhere
+        return(false);
+
+    }
+
+    public static void swarm(MapLocation location, int quantity) throws GameActionException{
+        int rollcall = 0;
+        if (swarm) {
+            moveToTarget(rc.getInitialArchonLocations(rc.getTeam().opponent())[0]);
+            return;
+        }
+        RobotInfo[] bots = rc.senseNearbyRobots();
+        for (RobotInfo b : bots) {
+            if (b.getTeam() == rc.getTeam() && b.getType() == RobotType.SOLDIER) {
+                rollcall += 1;
+            }
+        }
+        if (rollcall >= quantity) {
+            swarm = true;
+            moveToTarget(rc.getInitialArchonLocations(rc.getTeam().opponent())[0]);
+        }
+        else {
+            moveToTarget(location);
+        }
+    }
 
 
 }
