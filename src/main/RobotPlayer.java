@@ -88,11 +88,6 @@ public class RobotPlayer {
                 }
                 //DO NON LEADER ACTIONS
                 //Skip this component now and focus on just one archon
-                else {
-                    if (rc.canHireGardener(dir)) {
-                        rc.hireGardener(dir);
-                    }
-                }
 
                 //FOR GENERAL STUFF
                 Clock.yield();
@@ -121,6 +116,11 @@ public class RobotPlayer {
 
                //FOR THE FIRST 100 ROUNDS
                if (rc.getRoundNum() < 100) {
+
+                   //Look for optimal position to plant trees while trying to spawn scouts
+                   lookForOptimal(rc);
+
+
                    int prevNumScout = rc.readBroadcast(SCOUT_CHANNEL);
                    if (prevNumScout < SCOUT_MAX && rc.canBuildRobot(RobotType.SCOUT, dir)) {
                        rc.buildRobot(RobotType.SCOUT, dir);
@@ -129,8 +129,8 @@ public class RobotPlayer {
                }
                //After the gardener has built two scouts
                else {
-                   //keep track of the amount of trees ma
-                   if (rc.senseNearbyTrees().length < 2) {
+                   //keep track of the amount of trees nearby from the team (not neutral trees)
+                   if (rc.senseNearbyTrees(rc.getLocation(), 1.7f, rc.getTeam()).length < 2) {
                        //place code for planting trees
                        for (int i = 0; i <= 4; i++) {
                            if (rc.canPlantTree(initial.rotateRightDegrees(i * 60))) {
@@ -142,7 +142,7 @@ public class RobotPlayer {
                    //WATER THE TREE
                    TreeInfo[] trees = rc.senseNearbyTrees();
                    for (int j = 0; j < trees.length; j++) {
-                       if (trees[j].getHealth() <  BULLET_TREE_MAX_HEALTH - 10) {
+                       if (trees[j].getHealth() <  BULLET_TREE_MAX_HEALTH - 5) {
                            if (rc.canWater(trees[j].getID())) {
                                rc.water(trees[j].getID());
                                break;
@@ -150,10 +150,7 @@ public class RobotPlayer {
                        }
                    }
 
-                   //Not exactly the best method
-                   if (rc.senseNearbyTrees().length == 2) {
-                       tryBuild(RobotType.LUMBERJACK);
-                   }
+                   tryBuild(RobotType.LUMBERJACK);
 
                }
 
@@ -446,6 +443,16 @@ public class RobotPlayer {
                 rc.buildRobot(type,dirList[i]);
                 break;
             }
+        }
+    }
+
+    public static void lookForOptimal(RobotController rc) throws GameActionException {
+        RobotInfo[] bots = rc.senseNearbyRobots(rc.getLocation(), 3.00f, rc.getTeam());
+        TreeInfo[] trees = rc.senseNearbyTrees(3.00f);
+        if (bots.length == 0 && trees.length == 0) {
+            System.out.println("I can plant my own trees!");
+        } else {
+            wander();
         }
     }
 
