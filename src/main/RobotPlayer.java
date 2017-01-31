@@ -1,7 +1,6 @@
 package main;
 import battlecode.common.*;
 
-import java.awt.*;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -15,6 +14,7 @@ public class RobotPlayer {
     static RobotController rc;
     static Random myRand;
     static MapLocation myDest = null;
+    static Direction goingDir;
     static Direction myDir = null;
     static boolean stuck = false;
     static boolean swarm = false;
@@ -30,20 +30,23 @@ public class RobotPlayer {
     static int TREES_CHANNEL = 69;
     static int FIRST_ARCHON = 0;
     static int SWARM_CHANNEL = 100;
+    static int INITIAL_ENEMY_ARCHON_CHANNEL = 2;
+    static int ENEMY_ARCHON_KILLED = 3;
 
 
     //max respawn numbers
-    static int GARDENER_MAX = 2;
+    static int GARDENER_MAX = 1;
     static int SOLDIER_MAX = 2;
-    static int SCOUT_MAX = 2;
-    static int LUMBERJACK_MAX = 10;
+    static int SCOUT_MAX = 1;
+    static int LUMBERJACK_MAX = 2;
 
     //other important stuff
-    static Direction[] dirList = new Direction[4];
+    static Direction[] dirList = new Direction[9];
 
     public static void run(RobotController rc) throws GameActionException {
         RobotPlayer.rc = rc;
         myRand = new Random(rc.getID());
+        goingDir = randomDirection();
         initDirList();
         switch (rc.getType()) {
             case ARCHON:
@@ -69,11 +72,6 @@ public class RobotPlayer {
         while (true) {
             try {
                 dodge();
-
-                //tells soldiers where the Archon is
-                Direction toEnemy = rc.getLocation().directionTo(rc.getInitialArchonLocations(rc.getTeam().opponent())[0]);
-                writeLocation(rc.getLocation().add(toEnemy, rc.getType().bodyRadius), SWARM_CHANNEL);
-
                 Direction dir = randomDirection();
                 makeLeader(rc);
 
@@ -82,20 +80,16 @@ public class RobotPlayer {
                     int prevNumGard = rc.readBroadcast(GARDENER_CHANNEL);
                     rc.broadcast(GARDENER_CHANNEL, 0);
 
-                    //if there are less than 2 scouts keep building scouts for now
-                    if (prevNumGard == 1 && rc.readBroadcast(SCOUT_CHANNEL) < 2) {
-                        //one gardener already built so build one scout
-                        //tryBuild(RobotType.SCOUT);
-                    }
-                    else if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
-                        //find a strategy way place gardener.
-                        rc.hireGardener(dir);
+                    if (prevNumGard < GARDENER_MAX) {
+                        tryBuild(RobotType.GARDENER);
                         rc.broadcast(GARDENER_CHANNEL, prevNumGard + 1);
                     }
 
                 }
                 //DO NON LEADER ACTIONS
-                //Skip this component now and focus on just one archon
+                if (rc.getInitialArchonLocations(rc.getTeam()).length > 1) {
+                    //spawn the gardeners after x amount of rounds
+                }
 
                 //FOR GENERAL STUFF
                 Clock.yield();
@@ -116,36 +110,45 @@ public class RobotPlayer {
         while (true) {
             try {
                Direction initial = Direction.getEast();
-               Direction dir = randomDirection();
-               int prev = rc.readBroadcast(GARDENER_CHANNEL);
 
-               //update broadcast saying gardener is alive
+               //to keep live analysis of gardeners
+               int prev = rc.readBroadcast(GARDENER_CHANNEL);
                rc.broadcast(GARDENER_CHANNEL, prev + 1);
 
-               //FOR THE FIRST 100 ROUNDS
+               //for the first 150 rounds
                if (rc.getRoundNum() < 150) {
 
-                   //Look for optimal position to plant trees while trying to spawn scouts
-                   lookForOptimal(rc);
-
-
-                   int prevNumScout = rc.readBroadcast(SCOUT_CHANNEL);
-                   if (prevNumScout < SCOUT_MAX && rc.canBuildRobot(RobotType.SCOUT, dir)) {
-                       rc.buildRobot(RobotType.SCOUT, dir);
-                       rc.broadcast(SCOUT_CHANNEL, prevNumScout + 1);
+                   int prevNumLum = rc.readBroadcast(LUMBERJACK_CHANNEL);
+                   if (rc.senseNearbyTrees(3f).length > 3) {
+                       if (prevNumLum < LUMBERJACK_MAX) {
+                           if (tryBuild(RobotType.LUMBERJACK)) {
+                               rc.broadcast(LUMBERJACK_CHANNEL, prevNumLum + 1);
+                           }
+                       }
                    }
 
+                   //look for optimal position to plant trees while trying to spawn scouts
+                   lookForOptimal(rc);
+
+                   int prevNumScout = rc.readBroadcast(SCOUT_CHANNEL);
+                   if (prevNumScout < SCOUT_MAX) {
+                       if (tryBuild(RobotType.SCOUT)) {
+                           rc.broadcast(SCOUT_CHANNEL, prevNumScout + 1);
+                       }
+
+                   }
                    int prevNumSold = rc.readBroadcast(SOLDIER_CHANNEL);
-                   if (prevNumScout == 2 && prevNumSold < SOLDIER_MAX && rc.canBuildRobot(RobotType.SOLDIER, dir)) {
-                       rc.broadcast(SOLDIER_CHANNEL, prevNumSold + 1);
+
+                   if (prevNumScout == 1 && prevNumSold < SOLDIER_MAX && rc.getTeamBullets() > 100.00) {
+                       if (tryBuild(RobotType.SOLDIER)) {
+                           rc.broadcast(SOLDIER_CHANNEL, prevNumSold + 1);
+                       }
                    }
 
                }
-               //After the gardener has built two scouts
+               //After the gardener has built 1 scout + 2 unit robots == > build trees.
                else {
-                   //keep track of the amount of trees nearby from the team (not neutral trees)
-                   if (rc.senseNearbyTrees(rc.getLocation(), 1.7f, rc.getTeam()).length < 2) {
-                       //place code for planting trees
+                   if (rc.senseNearbyTrees(rc.getLocation(), 1.7f, rc.getTeam()).length < 4) {
                        for (int i = 0; i <= 4; i++) {
                            if (rc.canPlantTree(initial.rotateRightDegrees(i * 60))) {
                                rc.plantTree(initial.rotateRightDegrees(i * 60));
@@ -180,33 +183,29 @@ public class RobotPlayer {
         while(true) {
             try {
                 dodge();
-
-                if (rc.getRoundNum() - rc.readBroadcast(ENEMY_ARCHON_SPOTTED) < 10) {
-                    goTowards(readLocation(ENEMY_ARCHON_CHANNEL));
-                }
-                if (rc.getRoundNum() < 300) {
-                    if (myDest == null){
-                        MapLocation[] locs = rc.getInitialArchonLocations(rc.getTeam().opponent());
-                        myDest = locs[0];
-                    }
-                }
-                if (myDest != null) {
-                    goTowards(myDest);
+                Boolean archonDead = rc.readBroadcastBoolean(ENEMY_ARCHON_KILLED);
+                Boolean treeNotAhead = true;
+                TreeInfo[] trees = rc.senseNearbyTrees(1.5f, rc.getTeam().opponent());
+                for (TreeInfo tree: trees) {
+                    treeNotAhead = false;
+                    break;
                 }
 
 
 
-                RobotInfo[] bots = rc.senseNearbyRobots();
+                RobotInfo[] bots = rc.senseNearbyRobots(8f, rc.getTeam().opponent());
                 for (RobotInfo bot: bots) {
                     Direction toward= rc.getLocation().directionTo(bot.getLocation());
-                    if (bot.getTeam() != rc.getTeam() && bot.getType() != RobotType.ARCHON) {
+                    if (bot.getType() != RobotType.ARCHON && treeNotAhead) {
+                        goTowards(bot.getLocation());
                         if (rc.canFireTriadShot()) {
                             rc.fireTriadShot(toward);
                         } else if (rc.canFireSingleShot()) {
                             rc.fireSingleShot(toward);
                         }
                         break;
-                    } else if (bot.getType() == RobotType.ARCHON) {
+                    } else if (bot.getType() == RobotType.ARCHON && treeNotAhead) {
+                        goTowards(bot.getLocation());
                         if (rc.canFirePentadShot()) {
                             rc.firePentadShot(toward);
                         } else if (rc.canFireTriadShot()) {
@@ -215,6 +214,41 @@ public class RobotPlayer {
                             rc.fireSingleShot(toward);
                         }
                         break;
+                    } else {
+                        moveToTarget(bot.getLocation());
+                    }
+                }
+
+
+
+                //check if we should go for another archon
+                if (rc.getLocation().distanceTo(rc.getInitialArchonLocations(rc.getTeam().opponent())[rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL)]) < 3f && !archonDead) {
+                    //this will execute if no archon is found in the range
+                    if (!checkArchon(rc)) {
+                        int initialArchon = rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL);
+                        System.out.println(initialArchon);
+                        System.out.println(rc.getInitialArchonLocations(rc.getTeam().opponent()).length - 1);
+                        if (initialArchon < rc.getInitialArchonLocations(rc.getTeam().opponent()).length - 1) {
+                            rc.broadcast(INITIAL_ENEMY_ARCHON_CHANNEL, initialArchon + 1);
+                            rc.broadcastBoolean(ENEMY_ARCHON_KILLED, false);
+                        } else {
+                            rc.broadcastBoolean(ENEMY_ARCHON_KILLED, true);
+                        }
+                    }
+                }
+
+
+
+                if (!rc.hasAttacked()) {
+                    int initialArchon = rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL);
+                    if (!archonDead) {
+                        goTowards(rc.getInitialArchonLocations(rc.getTeam().opponent())[initialArchon]);
+                        if (!rc.hasMoved()) {
+                            moveToTarget(rc.getInitialArchonLocations(rc.getTeam().opponent())[initialArchon]);
+                        }
+                    } else {
+                        System.out.println("Is move thing working");
+                        lookAround(rc);
                     }
                 }
 
@@ -289,6 +323,24 @@ public class RobotPlayer {
         while (true) {
             try {
                 dodge();
+
+                TreeInfo[] trees = rc.senseNearbyTrees();
+                for (TreeInfo t: trees) {
+                    if (t.getContainedBullets() > 0) {
+                        if (!rc.hasMoved()) {
+                            if (rc.canMove(t.getLocation())) {
+                                rc.move(t.getLocation());
+                            }
+                        }
+                    }
+                    if (rc.canShake(t.getLocation())){
+                        System.out.println("I shook?");
+                        rc.shake(t.getID());
+                    }
+                }
+
+
+
                 RobotInfo[] bots = rc.senseNearbyRobots();
                 for (RobotInfo b: bots) {
                     if (b.getTeam() != rc.getTeam() && b.getType() == RobotType.ARCHON) {
@@ -329,7 +381,7 @@ public class RobotPlayer {
 
     static void makeLeader(RobotController rc) throws GameActionException {
         //make the initial broadcast a number that's very high
-        if (rc.readBroadcast(TREES_CHANNEL) == 0 && rc.readBroadcast(FIRST_ARCHON ) == 0) {
+        if (rc.readBroadcast(TREES_CHANNEL) == 0 && rc.readBroadcast(FIRST_ARCHON) == 0) {
             rc.broadcast(TREES_CHANNEL, 10000);
             rc.broadcast(FIRST_ARCHON, rc.readBroadcast(FIRST_ARCHON) + 1);
         }
@@ -339,6 +391,7 @@ public class RobotPlayer {
                 rc.broadcast(TREES_CHANNEL, rc.senseNearbyTrees().length);
             }
         }
+
         else if (rc.getRoundNum() == 2 && rc.readBroadcast(LEAD_ARCHON_CHANNEL) == 0
                 && rc.readBroadcast(TREES_CHANNEL) == rc.senseNearbyTrees().length) {
             rc.broadcast(LEAD_ARCHON_CHANNEL, rc.getID());
@@ -474,6 +527,7 @@ public class RobotPlayer {
         rc.broadcast(firstChannel +3, arr[3]);
     }
 
+    /*
     public static void initDirList(){
         for(int i=0;i<4;i++){
             float radians = (float)(-Math.PI + 2*Math.PI*((float)i)/4);
@@ -488,8 +542,32 @@ public class RobotPlayer {
                 rc.buildRobot(type,dirList[i]);
                 break;
             }
+            System.out.println("no robot can be made :(");
+        }
+    }*/
+
+    public static void initDirList() {
+        for(int i = 0; i < 9; i ++) {
+            float radians = (float) (2*Math.PI * ((float)i)/4);
+            dirList[i] = new Direction(radians);
         }
     }
+
+    public static Boolean tryBuild(RobotType type) throws GameActionException {
+        Boolean soldierBuilt = false;
+        for (int i = 0; i < 9; i++) {
+            if (rc.canBuildRobot(type, dirList[i])) {
+                rc.buildRobot(type, dirList[i]);
+                soldierBuilt = true;
+                break;
+            }
+            System.out.println("Can't build soldiers");
+        }
+        return soldierBuilt;
+    }
+
+
+
 
     public static void lookForOptimal(RobotController rc) throws GameActionException {
         RobotInfo[] bots = rc.senseNearbyRobots(rc.getLocation(), 3.00f, rc.getTeam());
@@ -497,7 +575,7 @@ public class RobotPlayer {
         if (bots.length == 0 && trees.length == 0) {
             System.out.println("I can plant my own trees!");
         } else {
-            wander();
+            lookAround(rc);
         }
     }
 
@@ -592,6 +670,41 @@ public class RobotPlayer {
         else {
             moveToTarget(location);
         }
+    }
+
+    public static void updateArchon(RobotController rc) throws GameActionException {
+        RobotInfo[] bots = rc.senseNearbyRobots();
+        for (RobotInfo bot: bots) {
+            if (bot.getTeam() != rc.getTeam() && bot.getType() == RobotType.ARCHON) {
+                return;
+            }
+        }
+        int ArchonNum = rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL);
+        myDest = null;
+        rc.broadcast(INITIAL_ENEMY_ARCHON_CHANNEL, ArchonNum + 1);
+
+    }
+
+    public static void lookAround(RobotController rc) throws GameActionException {
+        if (rc.canMove(goingDir)){
+            rc.move(goingDir);
+        } else {
+            goingDir = randomDirection();
+        }
+
+    }
+
+    public static Boolean checkArchon(RobotController rc) throws GameActionException {
+        Boolean Archon = false;
+        RobotInfo[] possibleArchon = rc.senseNearbyRobots(8f, rc.getTeam().opponent());
+        for (RobotInfo bot: possibleArchon) {
+            if (bot.getType() == RobotType.ARCHON) {
+                //Archon Alive!!!
+                Archon = true;
+                break;
+            }
+        }
+        return Archon;
     }
 
 
