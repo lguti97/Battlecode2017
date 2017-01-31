@@ -22,6 +22,7 @@ public class RobotPlayer {
     //broadcast channels
     static int GARDENER_CHANNEL = 5;
     static int SCOUT_CHANNEL = 17;
+    static int SOLDIER_CHANNEL = 1;
     static int LUMBERJACK_CHANNEL = 6;
     static int ENEMY_ARCHON_CHANNEL = 50;
     static int ENEMY_ARCHON_SPOTTED = 54;
@@ -33,6 +34,7 @@ public class RobotPlayer {
 
     //max respawn numbers
     static int GARDENER_MAX = 2;
+    static int SOLDIER_MAX = 2;
     static int SCOUT_MAX = 2;
     static int LUMBERJACK_MAX = 10;
 
@@ -83,7 +85,7 @@ public class RobotPlayer {
                     //if there are less than 2 scouts keep building scouts for now
                     if (prevNumGard == 1 && rc.readBroadcast(SCOUT_CHANNEL) < 2) {
                         //one gardener already built so build one scout
-                        tryBuild(RobotType.SCOUT);
+                        //tryBuild(RobotType.SCOUT);
                     }
                     else if (prevNumGard < GARDENER_MAX && rc.canHireGardener(dir)) {
                         //find a strategy way place gardener.
@@ -121,7 +123,7 @@ public class RobotPlayer {
                rc.broadcast(GARDENER_CHANNEL, prev + 1);
 
                //FOR THE FIRST 100 ROUNDS
-               if (rc.getRoundNum() < 100) {
+               if (rc.getRoundNum() < 150) {
 
                    //Look for optimal position to plant trees while trying to spawn scouts
                    lookForOptimal(rc);
@@ -132,6 +134,12 @@ public class RobotPlayer {
                        rc.buildRobot(RobotType.SCOUT, dir);
                        rc.broadcast(SCOUT_CHANNEL, prevNumScout + 1);
                    }
+
+                   int prevNumSold = rc.readBroadcast(SOLDIER_CHANNEL);
+                   if (prevNumScout == 2 && prevNumSold < SOLDIER_MAX && rc.canBuildRobot(RobotType.SOLDIER, dir)) {
+                       rc.broadcast(SOLDIER_CHANNEL, prevNumSold + 1);
+                   }
+
                }
                //After the gardener has built two scouts
                else {
@@ -173,22 +181,43 @@ public class RobotPlayer {
             try {
                 dodge();
 
-                if (!rc.hasMoved()) {
-                    MapLocation loc = readLocation(SWARM_CHANNEL);
-                    swarm(loc, 5);
+                if (rc.getRoundNum() - rc.readBroadcast(ENEMY_ARCHON_SPOTTED) < 10) {
+                    goTowards(readLocation(ENEMY_ARCHON_CHANNEL));
                 }
+                if (rc.getRoundNum() < 300) {
+                    if (myDest == null){
+                        MapLocation[] locs = rc.getInitialArchonLocations(rc.getTeam().opponent());
+                        myDest = locs[0];
+                    }
+                }
+                if (myDest != null) {
+                    goTowards(myDest);
+                }
+
+
 
                 RobotInfo[] bots = rc.senseNearbyRobots();
                 for (RobotInfo bot: bots) {
-                    if (bot.getTeam() != rc.getTeam() && rc.canFireTriadShot()) {
-                        fixLocation(rc, bot);
-                        rc.fireTriadShot(rc.getLocation().directionTo(bot.getLocation()));
+                    Direction toward= rc.getLocation().directionTo(bot.getLocation());
+                    if (bot.getTeam() != rc.getTeam() && bot.getType() != RobotType.ARCHON) {
+                        if (rc.canFireTriadShot()) {
+                            rc.fireTriadShot(toward);
+                        } else if (rc.canFireSingleShot()) {
+                            rc.fireSingleShot(toward);
+                        }
+                        break;
+                    } else if (bot.getType() == RobotType.ARCHON) {
+                        if (rc.canFirePentadShot()) {
+                            rc.firePentadShot(toward);
+                        } else if (rc.canFireTriadShot()) {
+                            rc.fireTriadShot(toward);
+                        } else if (rc.canFireSingleShot()) {
+                            rc.fireSingleShot(toward);
+                        }
+                        break;
                     }
                 }
 
-                if (!rc.hasAttacked()) {
-                    moveToTarget(rc.getInitialArchonLocations(rc.getTeam().opponent())[0]);
-                }
                 Clock.yield();
 
             } catch (Exception e) {
@@ -260,15 +289,11 @@ public class RobotPlayer {
         while (true) {
             try {
                 dodge();
-                //sensing nearby robots
                 RobotInfo[] bots = rc.senseNearbyRobots();
                 for (RobotInfo b: bots) {
                     if (b.getTeam() != rc.getTeam() && b.getType() == RobotType.ARCHON) {
-                        //If the Archon is not part of the team
-                        //Send a message describing the location of the Archon
                         writeLocation(b.getLocation(), ENEMY_ARCHON_CHANNEL);
                         rc.broadcast(ENEMY_ARCHON_SPOTTED, rc.getRoundNum());
-                        Direction towards = rc.getLocation().directionTo(b.getLocation());
                         break;
                     }
                 }
