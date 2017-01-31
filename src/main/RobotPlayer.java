@@ -252,6 +252,15 @@ public class RobotPlayer {
                     }
                 }
 
+                if (rc.getRoundNum() > 1500) {
+                    rc.donate(4);
+                }
+
+                if (rc.getRoundNum() > 2500) {
+                    int bullets = Math.round(rc.getTeamBullets());
+                    rc.donate(bullets);
+                }
+
                 Clock.yield();
 
             } catch (Exception e) {
