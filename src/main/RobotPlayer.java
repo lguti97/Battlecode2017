@@ -253,11 +253,11 @@ public class RobotPlayer {
                 }
 
                 if (rc.getRoundNum() > 1500) {
-                    rc.donate(4);
+                    rc.donate(4f);
                 }
 
                 if (rc.getRoundNum() > 2500) {
-                    int bullets = Math.round(rc.getTeamBullets());
+                    float bullets = rc.getTeamBullets();
                     rc.donate(bullets);
                 }
 
