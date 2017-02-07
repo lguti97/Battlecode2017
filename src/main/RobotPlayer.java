@@ -222,7 +222,7 @@ public class RobotPlayer {
 
 
                 //check if we should go for another archon
-                if (rc.getLocation().distanceTo(rc.getInitialArchonLocations(rc.getTeam().opponent())[rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL)]) < 3f && !archonDead) {
+                if (rc.getLocation().distanceTo(rc.getInitialArchonLocations(rc.getTeam().opponent())[rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL)]) < 6f && !archonDead) {
                     //this will execute if no archon is found in the range
                     if (!checkArchon(rc)) {
                         int initialArchon = rc.readBroadcast(INITIAL_ENEMY_ARCHON_CHANNEL);
